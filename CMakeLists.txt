@@ -6,9 +6,4 @@ build_lib(
     model/qct-ared-queue-disc.h
   LIBRARIES_TO_LINK
     ${libtraffic-control}
-    ${libnetwork}
-    ${libinternet}
-    ${libpoint-to-point}
-    ${libapplications}
-    ${libflow-monitor}
 )
