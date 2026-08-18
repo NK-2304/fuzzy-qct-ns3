@@ -1,0 +1,11 @@
+*.o
+*.so
+*.dylib
+*.a
+*.pyc
+__pycache__/
+.vscode/
+build/
+*.pcap
+*.tr
+*.xml
