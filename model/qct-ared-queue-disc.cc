@@ -146,30 +146,40 @@ QctAredQueueDisc::UpdateMidTh(double dAvg, double sdAvg)
 }
 
 double
-QctAredQueueDisc::CalculateDropProb(double avg) // 3.2. Dropping probability model [6 - 14]
+QctAredQueueDisc::CalculateDropProb(double avg, double dAvg, double sdAvg)
 {
-  // reset packet counter
+  // Universal safety check: zero drop below minimum threshold
   if (avg < m_minTh)
     {
       m_count = 0;
       return 0.0;
     }
-  // cubical function
-  else if (avg < m_midTh)
+
+  // Quadrant 1: dAvg > 0 && sdAvg > 0 -> p1: Linear over [minTh, midTh] (Eq. 7, 11)
+  if (dAvg > 0 && sdAvg > 0)
     {
+      if (avg >= m_midTh) return 1.0;
+      return m_maxP * (avg - m_minTh) / (m_midTh - m_minTh);
+    }
+  // Quadrant 2: dAvg > 0 && sdAvg <= 0 -> p2: Cubic over [minTh, midTh] (Eq. 8, 12)
+  else if (dAvg > 0 && sdAvg <= 0)
+    {
+      if (avg >= m_midTh) return 1.0;
       double ratio = (avg - m_minTh) / (m_midTh - m_minTh);
-      return m_maxP * 0.5 * std::pow(ratio, 3.0);
+      return m_maxP * std::pow(ratio, 3.0);
     }
-  // linear function
-  else if (avg < m_maxTh)
+  // Quadrant 3: dAvg <= 0 && sdAvg > 0 -> p3: Linear over [minTh, maxTh] (Eq. 9, 13)
+  else if (dAvg <= 0 && sdAvg > 0)
     {
-      double ratio = (avg - m_midTh) / (m_maxTh - m_midTh);
-      return (m_maxP * 0.5) + (m_maxP * 0.5 * ratio);
+      if (avg >= m_maxTh) return 1.0;
+      return m_maxP * (avg - m_minTh) / (m_maxTh - m_minTh);
     }
-  // drop all packets when avg >= max_th
+  // Quadrant 4: dAvg <= 0 && sdAvg <= 0 -> p4: Cubic over [minTh, maxTh] (Eq. 10, 14)
   else
     {
-      return 1.0;
+      if (avg >= m_maxTh) return 1.0;
+      double ratio = (avg - m_minTh) / (m_maxTh - m_minTh);
+      return m_maxP * std::pow(ratio, 3.0);
     }
 }
 
@@ -189,7 +199,7 @@ QctAredQueueDisc::DoEnqueue(Ptr<QueueDiscItem> item)
 
   UpdateMidTh(m_dAvg, m_sdAvg);
 
-  double pb = CalculateDropProb(newQAvg);
+  double pb = CalculateDropProb(newQAvg, m_dAvg, m_sdAvg);
   m_curDropProb = pb;
 
   if (pb >= 1.0)

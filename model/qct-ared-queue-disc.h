@@ -32,7 +32,7 @@ protected:
 private:
   double CalculateWq(uint32_t currentQ) const;
   void UpdateMidTh(double dAvg, double sdAvg);
-  double CalculateDropProb(double avg);
+  double CalculateDropProb(double avg, double dAvg, double sdAvg);
 
   double m_minTh;
   double m_maxTh;
