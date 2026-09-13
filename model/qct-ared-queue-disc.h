@@ -30,7 +30,7 @@ protected:
   virtual void InitializeParams(void) override;
 
 private:
-  double CalculateWq(uint32_t currentQ) const;
+  double CalculateWq(double avg) const;
   void UpdateMidTh(double dAvg, double sdAvg);
   double CalculateDropProb(double avg, double dAvg, double sdAvg);
 

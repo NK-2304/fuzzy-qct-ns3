@@ -69,8 +69,9 @@ int main(int argc, char* argv[])
                            "MinTh", DoubleValue(24.0),
                            "MaxTh", DoubleValue(72.0),
                            "QW", DoubleValue(0.002),
-                           "LInterm", DoubleValue(0.1),
-                           "ARED", BooleanValue(true));
+                           "LInterm", DoubleValue(10.0),
+                           "ARED", BooleanValue(false),
+                           "AdaptMaxP", BooleanValue(true));
     }
   else
     {
@@ -78,8 +79,9 @@ int main(int argc, char* argv[])
                            "MinTh", DoubleValue(24.0),
                            "MaxTh", DoubleValue(72.0),
                            "QW", DoubleValue(0.002),
-                           "LInterm", DoubleValue(0.1),
-                           "ARED", BooleanValue(false));
+                           "LInterm", DoubleValue(10.0),
+                           "ARED", BooleanValue(false),
+                           "AdaptMaxP", BooleanValue(false));
     }
 
   // Uninstall the default FqCoDel queue disc before installing RED/QCT

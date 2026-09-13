@@ -104,21 +104,18 @@ QctAredQueueDisc::GetDropProbability() const
 
 // 2.1. Novel average queue length evaluation model (queue weight) [2]
 double
-QctAredQueueDisc::CalculateWq(uint32_t currentQ) const
+QctAredQueueDisc::CalculateWq(double avg) const
 {
-  if (currentQ < m_minTh)
+  if (avg < m_minTh || avg >= m_maxTh)
     {
-      return m_wq0 / 2.0;
-    }
-  else if (currentQ <= m_maxTh)
-    {
-      return m_wq0;
+      return 4.0 * m_wq0; // 0.008: Rapid responsiveness outside the safe band
     }
   else
     {
-      return 2.0 * m_wq0;
+      return 2.0 * m_wq0; // 0.004: Stable smoothing within the operating band
     }
 }
+
 // 3.1. Threshold update model [5]
 void
 QctAredQueueDisc::UpdateMidTh(double dAvg, double sdAvg)
@@ -189,11 +186,11 @@ QctAredQueueDisc::DoEnqueue(Ptr<QueueDiscItem> item)
   uint32_t currentQ = GetInternalQueue(0)->GetCurrentSize().GetValue();
   double inst = static_cast<double>(currentQ);
 
-  // 1. Calculate adaptive weight wq
-  double wq = CalculateWq(currentQ);
+  // 1. Equation (2): Compute adaptive weight based on current smoothed average avg(t)
+  double prevAvg = m_qAvg.Get();
+  double wq = CalculateWq(prevAvg);
 
   // 2. Equation (1): Update average queue length
-  double prevAvg = m_qAvg.Get();
   double newQAvg = (1.0 - wq) * prevAvg + wq * inst;
   m_qAvg = newQAvg;
 
