@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
 {
   std::string queueType = "QCT";
   uint32_t nSources = 50;
-  double simTime = 20.0;
+  double simTime = 20.0; // BP -> 100 (for timeseries plots)
   uint32_t seed = 1;
 
   CommandLine cmd(__FILE__);
@@ -44,14 +44,14 @@ int main(int argc, char* argv[])
 
   PointToPointDumbbellHelper dumbbell(nSources, accessLink, nSources, accessLink, bottleneckLink);
 
-  // 2. Install Network Stack
+  // 2. Install Network Stack (IPv4 network layer and TCP transport layer)
   InternetStackHelper stack;
   dumbbell.InstallStack(stack);
 
   dumbbell.AssignIpv4Addresses(
-      Ipv4AddressHelper("10.1.1.0", "255.255.255.0"),
-      Ipv4AddressHelper("10.2.1.0", "255.255.255.0"),
-      Ipv4AddressHelper("10.3.1.0", "255.255.255.0"));
+      Ipv4AddressHelper("10.1.1.0", "255.255.255.0"), // serves left-side senders
+      Ipv4AddressHelper("10.2.1.0", "255.255.255.0"), // serves right-side receivers
+      Ipv4AddressHelper("10.3.1.0", "255.255.255.0")); // serves bottleneck link
 
   // 3. Configure Queue Discipline on Bottleneck Router
   TrafficControlHelper tch;
@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
       BulkSendHelper source("ns3::TcpSocketFactory", sinkAddress);
       source.SetAttribute("MaxBytes", UintegerValue(0));
       ApplicationContainer sourceApp = source.Install(dumbbell.GetLeft(i));
-      sourceApp.Start(Seconds(0.1 + (i * 0.02)));
+      sourceApp.Start(Seconds(0.1 + (i * 0.02))); // Staggered Start for avoiding artificial startup spikes
       sourceApp.Stop(Seconds(simTime));
     }
 
@@ -140,7 +140,7 @@ int main(int argc, char* argv[])
             }
         }
     }
-
+  // calculates the four primary metrics
   double throughputMbps = (totalRxBytes * 8.0) / (simTime * 1e6);
   double lossRatePct = totalTxPackets > 0 ? (100.0 * totalLostPackets / totalTxPackets) : 0.0;
   double avgDelayMs = totalRxPackets > 0 ? (sumDelaySec / totalRxPackets) * 1000.0 : 0.0;

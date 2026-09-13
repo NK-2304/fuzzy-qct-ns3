@@ -37,19 +37,19 @@ private:
   double m_minTh;
   double m_maxTh;
   double m_midTh;
-  double m_wq0;
+  double m_wq0; // [2]
   double m_maxP;
   double m_alpha;
   double m_beta;
 
   TracedValue<double> m_qAvg;
   double m_prevQAvg;
-  double m_dAvg;
+  double m_dAvg; // [3]
   double m_prevDAvg;
-  double m_sdAvg;
-  TracedValue<double> m_curMidTh;
-  TracedValue<double> m_curDropProb;
-  uint32_t m_count;
+  double m_sdAvg; // [4]
+  TracedValue<double> m_curMidTh; // [5]
+  TracedValue<double> m_curDropProb; // [6 - 14]
+  uint32_t m_count; // fig.4 
 
   Ptr<UniformRandomVariable> m_uv;
 };

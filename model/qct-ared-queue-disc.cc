@@ -102,6 +102,7 @@ QctAredQueueDisc::GetDropProbability() const
   return m_curDropProb.Get();
 }
 
+// 2.1. Novel average queue length evaluation model (queue weight) [2]
 double
 QctAredQueueDisc::CalculateWq(uint32_t currentQ) const
 {
@@ -118,7 +119,7 @@ QctAredQueueDisc::CalculateWq(uint32_t currentQ) const
       return 2.0 * m_wq0;
     }
 }
-
+// 3.1. Threshold update model [5]
 void
 QctAredQueueDisc::UpdateMidTh(double dAvg, double sdAvg)
 {
@@ -139,29 +140,33 @@ QctAredQueueDisc::UpdateMidTh(double dAvg, double sdAvg)
     {
       delta = m_beta / 2.0;
     }
-
+  // Safeguards mid_th to be within the range of (min_th, max_th) preventing threshold collapse.
   m_midTh = std::clamp(m_midTh + delta, m_minTh + 1.0, m_maxTh - 1.0);
   m_curMidTh = m_midTh;
 }
 
 double
-QctAredQueueDisc::CalculateDropProb(double avg)
+QctAredQueueDisc::CalculateDropProb(double avg) // 3.2. Dropping probability model [6 - 14]
 {
+  // reset packet counter
   if (avg < m_minTh)
     {
       m_count = 0;
       return 0.0;
     }
+  // cubical function
   else if (avg < m_midTh)
     {
       double ratio = (avg - m_minTh) / (m_midTh - m_minTh);
       return m_maxP * 0.5 * std::pow(ratio, 3.0);
     }
+  // linear function
   else if (avg < m_maxTh)
     {
       double ratio = (avg - m_midTh) / (m_maxTh - m_midTh);
       return (m_maxP * 0.5) + (m_maxP * 0.5 * ratio);
     }
+  // drop all packets when avg >= max_th
   else
     {
       return 1.0;
@@ -175,12 +180,12 @@ QctAredQueueDisc::DoEnqueue(Ptr<QueueDiscItem> item)
 
   double wq = CalculateWq(currentQ);
   m_prevQAvg = m_qAvg.Get();
-  double newQAvg = (1.0 - wq) * m_prevQAvg + wq * static_cast<double>(currentQ);
+  double newQAvg = (1.0 - wq) * m_prevQAvg + wq * static_cast<double>(currentQ); // Exponential weighted moving average (EWMA) [1]
   m_qAvg = newQAvg;
 
   m_prevDAvg = m_dAvg;
-  m_dAvg = newQAvg - m_prevQAvg;
-  m_sdAvg = m_dAvg - m_prevDAvg;
+  m_dAvg = newQAvg - m_prevQAvg; // velocity of average queue length change
+  m_sdAvg = m_dAvg - m_prevDAvg; // acceleration of average queue length change
 
   UpdateMidTh(m_dAvg, m_sdAvg);
 
@@ -209,7 +214,7 @@ QctAredQueueDisc::DoEnqueue(Ptr<QueueDiscItem> item)
       m_count = 0;
     }
 
-  return GetInternalQueue(0)->Enqueue(item);
+  return GetInternalQueue(0)->Enqueue(item); // packet sent to buffer for transmission if not dropped
 }
 
 Ptr<QueueDiscItem>
