@@ -69,9 +69,9 @@ QctAredQueueDisc::QctAredQueueDisc()
     m_alpha(0.5),
     m_beta(0.5),
     m_qAvg(0.0),
-    m_prevQAvg(0.0),
+    m_instPrev1(0.0),
     m_dAvg(0.0),
-    m_prevDAvg(0.0),
+    m_instPrev2(0.0),
     m_sdAvg(0.0),
     m_curMidTh(48.0),
     m_curDropProb(0.0),
@@ -187,21 +187,34 @@ bool
 QctAredQueueDisc::DoEnqueue(Ptr<QueueDiscItem> item)
 {
   uint32_t currentQ = GetInternalQueue(0)->GetCurrentSize().GetValue();
+  double inst = static_cast<double>(currentQ);
 
+  // 1. Calculate adaptive weight wq
   double wq = CalculateWq(currentQ);
-  m_prevQAvg = m_qAvg.Get();
-  double newQAvg = (1.0 - wq) * m_prevQAvg + wq * static_cast<double>(currentQ); // Exponential weighted moving average (EWMA) [1]
+
+  // 2. Equation (1): Update average queue length
+  double prevAvg = m_qAvg.Get();
+  double newQAvg = (1.0 - wq) * prevAvg + wq * inst;
   m_qAvg = newQAvg;
 
-  m_prevDAvg = m_dAvg;
-  m_dAvg = newQAvg - m_prevQAvg; // velocity of average queue length change
-  m_sdAvg = m_dAvg - m_prevDAvg; // acceleration of average queue length change
+  // 3. Equation (3): Velocity / 1st-order rate of change
+  m_dAvg = (1.0 - wq) * m_dAvg + wq * (inst - m_instPrev1);
 
+  // 4. Equation (4): Acceleration / 2nd-order rate of change
+  m_sdAvg = (1.0 - wq) * m_sdAvg + wq * (inst - 2.0 * m_instPrev1 + m_instPrev2);
+
+  // 5. Shift instantaneous samples for the next packet arrival
+  m_instPrev2 = m_instPrev1;
+  m_instPrev1 = inst;
+
+  // 6. Update dynamic intermediate threshold
   UpdateMidTh(m_dAvg, m_sdAvg);
 
+  // 7. Calculate drop probability using the 4-quadrant curves
   double pb = CalculateDropProb(newQAvg, m_dAvg, m_sdAvg);
   m_curDropProb = pb;
 
+  // 8. Dropping evaluation
   if (pb >= 1.0)
     {
       m_count = 0;
@@ -224,7 +237,7 @@ QctAredQueueDisc::DoEnqueue(Ptr<QueueDiscItem> item)
       m_count = 0;
     }
 
-  return GetInternalQueue(0)->Enqueue(item); // packet sent to buffer for transmission if not dropped
+  return GetInternalQueue(0)->Enqueue(item);
 }
 
 Ptr<QueueDiscItem>
@@ -272,6 +285,12 @@ QctAredQueueDisc::InitializeParams(void)
 {
   m_midTh = (m_minTh + m_maxTh) / 2.0;
   m_curMidTh = m_midTh;
+  m_qAvg = 0.0;
+  m_dAvg = 0.0;
+  m_sdAvg = 0.0;
+  m_instPrev1 = 0.0;
+  m_instPrev2 = 0.0;
+  m_count = 0;
 }
 
 } // namespace ns3

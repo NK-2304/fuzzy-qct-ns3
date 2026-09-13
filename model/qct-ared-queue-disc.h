@@ -43,9 +43,9 @@ private:
   double m_beta;
 
   TracedValue<double> m_qAvg;
-  double m_prevQAvg;
+  double m_instPrev1;  // inst(t)
   double m_dAvg; // [3]
-  double m_prevDAvg;
+  double m_instPrev2;  // inst(t-1)
   double m_sdAvg; // [4]
   TracedValue<double> m_curMidTh; // [5]
   TracedValue<double> m_curDropProb; // [6 - 14]
