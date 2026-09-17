@@ -22,6 +22,9 @@ public:
   double GetMidThreshold() const;
   double GetDropProbability() const;
 
+  double GetDavg() const;
+  double GetSdavg() const;
+
 protected:
   virtual bool DoEnqueue(Ptr<QueueDiscItem> item) override;
   virtual Ptr<QueueDiscItem> DoDequeue(void) override;
@@ -49,6 +52,8 @@ private:
   double m_sdAvg; // [4]
   TracedValue<double> m_curMidTh; // [5]
   TracedValue<double> m_curDropProb; // [6 - 14]
+  TracedValue<double> m_curDavg;     // mirrors m_dAvg, for tracing/plots
+  TracedValue<double> m_curSdavg;    // mirrors m_sdAvg, for tracing/plots
   uint32_t m_count; // fig.4 
 
   Ptr<UniformRandomVariable> m_uv;

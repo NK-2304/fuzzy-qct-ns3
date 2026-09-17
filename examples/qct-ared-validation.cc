@@ -18,20 +18,27 @@ NS_LOG_COMPONENT_DEFINE("QctAredValidation");
 
 int main(int argc, char* argv[])
 {
+  NS_LOG_UNCOND("=== BUILD MARKER: " __DATE__ " " __TIME__ " ===");
+
   std::string queueType = "QCT";
   uint32_t nSources = 50;
   double simTime = 20.0; // BP -> 100 (for timeseries plots)
+  double warmupTime = 10.0; // Discard initial TCP slow-start transients
   uint32_t seed = 1;
-
+  uint32_t runNumber = 1;
+  
   CommandLine cmd(__FILE__);
   cmd.AddValue("queueType", "Queue discipline to test (RED, ARED, QCT)", queueType);
   cmd.AddValue("nSources", "Number of sender/receiver pairs", nSources);
   cmd.AddValue("simTime", "Simulation duration in seconds", simTime);
+  cmd.AddValue("warmupTime", "Time to discard before measuring steady-state stats", warmupTime);
   cmd.AddValue("seed", "Random seed", seed);
   cmd.Parse(argc, argv);
 
   RngSeedManager::SetSeed(seed);
-  RngSeedManager::SetRun(1);
+  RngSeedManager::SetRun(runNumber);
+
+  Config::SetDefault("ns3::TcpL4Protocol::SocketType", TypeIdValue(TcpNewReno::GetTypeId()));
 
   // 1. Configure Links per Paper Section 4.1
   PointToPointHelper accessLink;
@@ -70,8 +77,7 @@ int main(int argc, char* argv[])
                            "MaxTh", DoubleValue(72.0),
                            "QW", DoubleValue(0.002),
                            "LInterm", DoubleValue(10.0),
-                           "ARED", BooleanValue(false),
-                           "AdaptMaxP", BooleanValue(true));
+                           "ARED", BooleanValue(true));
     }
   else
     {
@@ -101,7 +107,7 @@ int main(int argc, char* argv[])
       BulkSendHelper source("ns3::TcpSocketFactory", sinkAddress);
       source.SetAttribute("MaxBytes", UintegerValue(0));
       ApplicationContainer sourceApp = source.Install(dumbbell.GetLeft(i));
-      sourceApp.Start(Seconds(0.1 + (i * 0.02))); // Staggered Start for avoiding artificial startup spikes
+      sourceApp.Start(Seconds(0.1)); 
       sourceApp.Stop(Seconds(simTime));
     }
 
@@ -111,6 +117,7 @@ int main(int argc, char* argv[])
   FlowMonitorHelper flowmonHelper;
   Ptr<FlowMonitor> monitor = flowmonHelper.InstallAll();
 
+  Simulator::Schedule(Seconds(warmupTime), &FlowMonitor::ResetAllStats, monitor);
   Simulator::Stop(Seconds(simTime));
   Simulator::Run();
 
@@ -143,7 +150,8 @@ int main(int argc, char* argv[])
         }
     }
   // calculates the four primary metrics
-  double throughputMbps = (totalRxBytes * 8.0) / (simTime * 1e6);
+  double measuredDuration = (simTime > warmupTime) ? (simTime - warmupTime) : simTime;
+  double throughputMbps = (totalRxBytes * 8.0) / (measuredDuration * 1e6);
   double lossRatePct = totalTxPackets > 0 ? (100.0 * totalLostPackets / totalTxPackets) : 0.0;
   double avgDelayMs = totalRxPackets > 0 ? (sumDelaySec / totalRxPackets) * 1000.0 : 0.0;
   double avgJitterMs = totalRxPackets > 0 ? (sumJitterSec / totalRxPackets) * 1000.0 : 0.0;

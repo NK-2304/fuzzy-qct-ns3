@@ -39,14 +39,16 @@ QctAredQueueDisc::GetTypeId(void)
                    DoubleValue(0.1),
                    MakeDoubleAccessor(&QctAredQueueDisc::m_maxP),
                    MakeDoubleChecker<double>())
-    .AddAttribute("Alpha", "mid_th adjustment increment step.",
-                   DoubleValue(0.5),
-                   MakeDoubleAccessor(&QctAredQueueDisc::m_alpha),
-                   MakeDoubleChecker<double>())
-    .AddAttribute("Beta", "mid_th adjustment decrement step.",
-                   DoubleValue(0.5),
-                   MakeDoubleAccessor(&QctAredQueueDisc::m_beta),
-                   MakeDoubleChecker<double>())
+    .AddAttribute("Alpha",
+                  "Step size for decreasing midTh when queue is growing",
+                  DoubleValue(1.0),
+                  MakeDoubleAccessor(&QctAredQueueDisc::m_alpha),
+                  MakeDoubleChecker<double>(0.0))
+    .AddAttribute("Beta",
+                  "Step size for increasing midTh when queue is shrinking",
+                  DoubleValue(1.0),
+                  MakeDoubleAccessor(&QctAredQueueDisc::m_beta),
+                  MakeDoubleChecker<double>(0.0))
     .AddTraceSource("AvgQueueSize", "Average queue size calculated by QCT-ARED",
                     MakeTraceSourceAccessor(&QctAredQueueDisc::m_qAvg),
                     "ns3::TracedValueCallback::Double")
@@ -55,6 +57,14 @@ QctAredQueueDisc::GetTypeId(void)
                     "ns3::TracedValueCallback::Double")
     .AddTraceSource("DropProbability", "Calculated packet drop probability",
                     MakeTraceSourceAccessor(&QctAredQueueDisc::m_curDropProb),
+                    "ns3::TracedValueCallback::Double")
+    .AddTraceSource("Davg",
+                    "First-order change rate of average queue length",
+                    MakeTraceSourceAccessor(&QctAredQueueDisc::m_curDavg),
+                    "ns3::TracedValueCallback::Double")
+    .AddTraceSource("Sdavg",
+                    "Second-order change rate of average queue length",
+                    MakeTraceSourceAccessor(&QctAredQueueDisc::m_curSdavg),
                     "ns3::TracedValueCallback::Double");
   return tid;
 }
@@ -66,8 +76,8 @@ QctAredQueueDisc::QctAredQueueDisc()
     m_midTh(48.0),
     m_wq0(0.002),
     m_maxP(0.1),
-    m_alpha(0.5),
-    m_beta(0.5),
+    m_alpha(1.0),
+    m_beta(1.0),
     m_qAvg(0.0),
     m_instPrev1(0.0),
     m_dAvg(0.0),
@@ -75,6 +85,8 @@ QctAredQueueDisc::QctAredQueueDisc()
     m_sdAvg(0.0),
     m_curMidTh(48.0),
     m_curDropProb(0.0),
+    m_curDavg(0.0),
+    m_curSdavg(0.0),
     m_count(0)
 {
   m_uv = CreateObject<UniformRandomVariable>();
@@ -102,6 +114,18 @@ QctAredQueueDisc::GetDropProbability() const
   return m_curDropProb.Get();
 }
 
+double
+QctAredQueueDisc::GetDavg() const
+{
+  return m_curDavg.Get();
+}
+
+double
+QctAredQueueDisc::GetSdavg() const
+{
+  return m_curSdavg.Get();
+}
+
 // 2.1. Novel average queue length evaluation model (queue weight) [2]
 double
 QctAredQueueDisc::CalculateWq(double avg) const
@@ -121,24 +145,32 @@ void
 QctAredQueueDisc::UpdateMidTh(double dAvg, double sdAvg)
 {
   double delta = 0.0;
-  if (dAvg > 0 && sdAvg > 0)
+
+  if (dAvg > 0.0 && sdAvg > 0.0)
     {
-      delta = -m_alpha;
+      delta = -m_alpha;           // Accelerated queue growth: drop threshold faster
     }
-  else if (dAvg > 0 && sdAvg <= 0)
+  else if (dAvg > 0.0 && sdAvg <= 0.0)
     {
-      delta = -m_alpha / 2.0;
+      delta = -m_alpha / 2.0;     // Decelerated queue growth: moderate threshold drop
     }
-  else if (dAvg <= 0 && sdAvg < 0)
+  else if (dAvg == 0.0)
     {
-      delta = m_beta;
+      delta = 0.0;                // Steady state: mid_th unchanged (Eq. 5 exact condition)
     }
-  else if (dAvg <= 0 && sdAvg >= 0)
+  else if (dAvg < 0.0 && sdAvg > 0.0)
     {
-      delta = m_beta / 2.0;
+      delta = m_beta / 2.0;       // Queue draining, but deceleration slowing down
     }
-  // Safeguards mid_th to be within the range of (min_th, max_th) preventing threshold collapse.
-  m_midTh = std::clamp(m_midTh + delta, m_minTh + 1.0, m_maxTh - 1.0);
+  else // dAvg < 0.0 && sdAvg <= 0.0
+    {
+      delta = m_beta;             // Rapid queue drain: expand capacity aggressively
+    }
+
+  m_midTh += delta;
+
+  // Boundary clamp: keep midTh strictly within (minTh, maxTh)
+  m_midTh = std::max(m_minTh + 1.0, std::min(m_midTh, m_maxTh - 1.0));
   m_curMidTh = m_midTh;
 }
 
@@ -200,6 +232,10 @@ QctAredQueueDisc::DoEnqueue(Ptr<QueueDiscItem> item)
   // 4. Equation (4): Acceleration / 2nd-order rate of change
   m_sdAvg = (1.0 - wq) * m_sdAvg + wq * (inst - 2.0 * m_instPrev1 + m_instPrev2);
 
+  // Wire up traced mirrors for external monitoring and plotting
+  m_curDavg = m_dAvg;
+  m_curSdavg = m_sdAvg;
+
   // 5. Shift instantaneous samples for the next packet arrival
   m_instPrev2 = m_instPrev1;
   m_instPrev1 = inst;
@@ -221,7 +257,9 @@ QctAredQueueDisc::DoEnqueue(Ptr<QueueDiscItem> item)
   else if (pb > 0.0)
     {
       m_count++;
-      double pa = pb / (1.0 - static_cast<double>(m_count) * pb);
+      double denom = 1.0 - static_cast<double>(m_count) * pb;
+      double pa = (denom > 0.0) ? std::min(pb / denom, 1.0) : 1.0;
+
       if (m_uv->GetValue() < pa)
         {
           m_count = 0;
@@ -285,6 +323,8 @@ QctAredQueueDisc::InitializeParams(void)
   m_qAvg = 0.0;
   m_dAvg = 0.0;
   m_sdAvg = 0.0;
+  m_curDavg = 0.0;     
+  m_curSdavg = 0.0;    
   m_instPrev1 = 0.0;
   m_instPrev2 = 0.0;
   m_count = 0;
