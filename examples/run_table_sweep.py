@@ -4,7 +4,7 @@ import statistics
 
 algos = ["RED", "ARED", "QCT"]
 sources = [25, 50, 75, 100]
-SEEDS = list(range(1, 6))       # bump to range(1, 11) once this runs cleanly
+SEEDS = list(range(1, 11))       # bump to range(1, 11) once this runs cleanly
 SIM_TIME = 15.0
 WARMUP_TIME = 5.0
 
