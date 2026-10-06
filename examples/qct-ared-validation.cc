@@ -1,3 +1,4 @@
+#include <fstream>
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/internet-module.h"
@@ -7,6 +8,7 @@
 #include "ns3/traffic-control-module.h"
 #include "ns3/flow-monitor-module.h"
 #include "ns3/qct-ared-queue-disc.h"
+#include "ns3/fuzzy-qct-queue-disc.h"
 
 #include <iostream>
 #include <iomanip>
@@ -15,6 +17,13 @@
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("QctAredValidation");
+
+
+static std::ofstream g_midThLog;
+static void LogMidTh(double oldVal, double newVal)
+{
+  g_midThLog << Simulator::Now().GetSeconds() << "," << newVal << "\n";
+}
 
 int main(int argc, char* argv[])
 {
@@ -70,6 +79,16 @@ int main(int argc, char* argv[])
                            "Wq0", DoubleValue(0.002),
                            "MaxP", DoubleValue(0.1));
     }
+  else if (queueType == "FUZZY")
+    {
+      tch.SetRootQueueDisc("ns3::FuzzyQctQueueDisc",
+                           "MinTh", DoubleValue(24.0),
+                           "MaxTh", DoubleValue(72.0),
+                           "Wq0", DoubleValue(0.002),
+                           "MaxP", DoubleValue(0.1),
+                           "DavgRange", DoubleValue(0.12),
+                           "SdavgRange", DoubleValue(0.02));
+    }
   else if (queueType == "ARED")
     {
       tch.SetRootQueueDisc("ns3::RedQueueDisc",
@@ -93,6 +112,12 @@ int main(int argc, char* argv[])
   // Uninstall the default FqCoDel queue disc before installing RED/QCT
   tch.Uninstall(dumbbell.GetLeft()->GetDevice(0));
   tch.Install(dumbbell.GetLeft()->GetDevice(0));
+
+  Ptr<TrafficControlLayer> tcLayer = dumbbell.GetLeft()->GetObject<TrafficControlLayer>();
+  Ptr<QueueDisc> qdisc = tcLayer->GetRootQueueDiscOnDevice(dumbbell.GetLeft()->GetDevice(0));
+  g_midThLog.open(queueType + "_midth_trace.csv");
+  qdisc->TraceConnectWithoutContext("MidThreshold", MakeCallback(&LogMidTh));
+
 
   // 4. Install BulkSend Applications
   uint16_t port = 50000;
@@ -164,6 +189,12 @@ int main(int argc, char* argv[])
   std::cout << " Avg Delay  : " << std::fixed << std::setprecision(2) << avgDelayMs << " ms\n";
   std::cout << " Jitter     : " << std::fixed << std::setprecision(3) << avgJitterMs << " ms\n";
   std::cout << "=======================================================\n\n";
+   
+  
+  if (g_midThLog.is_open())
+    {
+      g_midThLog.close();
+    }
 
   Simulator::Destroy();
   return 0;
