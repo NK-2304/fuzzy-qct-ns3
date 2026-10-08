@@ -1,20 +1,13 @@
-# Fuzzy-QCT on NS-3 Research Lab Notebook
+# Benchmarking Harness Specification (Phase 4 / Phase 6 Fix)
 
-## System Environment
-- OS: Ubuntu 24.04 LTS on WSL2
-- GCC/G++: 13.3.0
-- NS-3 Version: 3.43 (Commit: 753817468)
-
-## Checkpoint Log
-- [x] Stage 1: WSL2 + Ubuntu 24.04 Environment Setup
-- [x] Stage 2: NS-3 Dependencies & Core Engine Build
-- [x] Stage 3: Traffic Control Architecture & Contrib Module Structure
-- [x] Stage 4: Baseline QctAredQueueDisc Implementation (Eqs. 1-14)
-- [ ] Stage 4.1: Dumbbell Validation Scenario (Replicate Tables 1-3)
-- [ ] Stage 5: C++ Fuzzy Engine (fuzzylite) & Surface Unit Tests
-- [ ] Stage 6: FuzzyQctQueueDisc Integration
-- [ ] Stage 7: 3-Tier Multi-Flow Traffic Generator
-- [ ] Stage 8: FlowMonitor & CSV Exporter
-- [ ] Stage 9: Multi-Seed Statistical Sweeps
-- [ ] Stage 10: Publication Analysis & Figures
-- [ ] Stage 11: Paper Manuscript Drafting
+- **Bottleneck NetDevice Queue**: `ns3::DropTailQueue` with `MaxSize = 1p` (eliminates driver bufferbloat).
+- **Bottleneck Link**: 10 Mbps DataRate, 40 ms propagation delay.
+- **Access Links**: 50 Mbps DataRate, 10 ms propagation delay.
+- **AQM Buffer Capacity**: `MaxSize = 120p` enforced identically across RED, ARED, QCT-ARED, and Fuzzy-QCT.
+- **TCP Stack**: `TcpNewReno`, segment size 1000 bytes, staggered starts via uniform jitter.
+- **Simulation Parameters**:
+  - `simTime`: 15 s
+  - Tuning Seeds: 1–5
+  - Evaluation / Reporting Seeds: 6–15
+- **Baseline Jitter Reduction (N=25 to 100)**:
+  - QCT vs RED: 10.0% (N=25), 30.8% (N=50), 44.9% (N=75), 62.2% (N=100).
