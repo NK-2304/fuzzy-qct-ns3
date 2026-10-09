@@ -35,7 +35,9 @@ protected:
 
 private:
   double m_davgRange;    ///< fuzzy input universe half-width for davg (Attribute)
-  double m_sdavgRange;   ///< fuzzy input universe half-width for sdavg (Attribute)
+  double m_sdavgRange;
+  double m_deltaGain;
+  bool m_gentleTail;   ///< fuzzy input universe half-width for sdavg (Attribute)
 
   std::unique_ptr<fuzzyqct::FuzzyEngine> m_fuzzyEngine;
 

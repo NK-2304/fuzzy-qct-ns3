@@ -1,3 +1,4 @@
+#include "ns3/boolean.h"
 #include "fuzzy-qct-queue-disc.h"
 #include "ns3/log.h"
 #include "ns3/double.h"
@@ -21,6 +22,16 @@ FuzzyQctQueueDisc::GetTypeId(void)
                   DoubleValue(0.12),
                   MakeDoubleAccessor(&FuzzyQctQueueDisc::m_davgRange),
                   MakeDoubleChecker<double>())
+            .AddAttribute("GentleTail",
+                   "Ramp pb from MaxP at mid_th to 1.0 at MaxTh instead of plateauing at MaxP.",
+                   BooleanValue(false),
+                   MakeBooleanAccessor(&FuzzyQctQueueDisc::m_gentleTail),
+                   MakeBooleanChecker())
+    .AddAttribute("DeltaGain",
+                   "Output scaling gain on fuzzy deltaMidTh (1.0 = unscaled).",
+                   DoubleValue(1.0),
+                   MakeDoubleAccessor(&FuzzyQctQueueDisc::m_deltaGain),
+                   MakeDoubleChecker<double>(0.0))
     .AddAttribute("SdavgRange",
                   "Fuzzy input universe half-width for sdavg (empirical 99th-percentile)",
                   DoubleValue(0.02),
@@ -58,7 +69,7 @@ FuzzyQctQueueDisc::UpdateMidTh(double dAvg, double sdAvg)
   fuzzyqct::FuzzyOutput out = m_fuzzyEngine->Evaluate(dAvg, sdAvg);
   m_curE = out.e;
 
-  m_midTh = std::clamp(m_midTh + out.deltaMidTh, m_minTh + 1.0, m_maxTh - 1.0);
+  m_midTh = std::clamp(m_midTh + m_deltaGain * out.deltaMidTh, m_minTh + 1.0, m_maxTh - 1.0);
   m_curMidTh = m_midTh;
 }
 
@@ -75,6 +86,10 @@ FuzzyQctQueueDisc::CalculateDropProb(double avg, double dAvg, double sdAvg)
   if (avg >= m_maxTh)
     {
       return 1.0;
+    }
+  if (m_gentleTail && avg >= m_midTh)
+    {
+      return std::clamp(m_maxP + (1.0 - m_maxP) * (avg - m_midTh) / (m_maxTh - m_midTh), 0.0, 1.0);
     }
 
   double ratio = (avg - m_minTh) / (m_midTh - m_minTh);

@@ -42,6 +42,10 @@ int main(int argc, char* argv[])
   cmd.AddValue("simTime", "Simulation duration in seconds", simTime);
   cmd.AddValue("warmupTime", "Time to discard before measuring steady-state stats", warmupTime);
   cmd.AddValue("seed", "Random seed", seed);
+  double deltaGain = 1.0;
+  cmd.AddValue("deltaGain", "Output scaling gain on fuzzy deltaMidTh", deltaGain);
+  bool gentle = false;
+  cmd.AddValue("gentle", "Enable gentle tail drop ramp above mid_th", gentle);
   cmd.Parse(argc, argv);
 
   RngSeedManager::SetSeed(seed);
@@ -55,6 +59,7 @@ int main(int argc, char* argv[])
   accessLink.SetChannelAttribute("Delay", StringValue("10ms"));
 
   PointToPointHelper bottleneckLink;
+  bottleneckLink.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("1p"));
   bottleneckLink.SetDeviceAttribute("DataRate", StringValue("10Mbps"));
   bottleneckLink.SetChannelAttribute("Delay", StringValue("40ms"));
 
@@ -87,11 +92,16 @@ int main(int argc, char* argv[])
                            "Wq0", DoubleValue(0.002),
                            "MaxP", DoubleValue(0.1),
                            "DavgRange", DoubleValue(0.12),
-                           "SdavgRange", DoubleValue(0.02));
+                           "SdavgRange", DoubleValue(0.02),
+                           "DeltaGain", DoubleValue(deltaGain),
+                           "GentleTail", BooleanValue(gentle));
     }
   else if (queueType == "ARED")
     {
       tch.SetRootQueueDisc("ns3::RedQueueDisc",
+                           "MaxSize", StringValue("120p"),
+                           "LinkBandwidth", DataRateValue(DataRate("10Mbps")),
+                           "MeanPktSize", UintegerValue(1000),
                            "MinTh", DoubleValue(24.0),
                            "MaxTh", DoubleValue(72.0),
                            "QW", DoubleValue(0.002),
@@ -101,6 +111,9 @@ int main(int argc, char* argv[])
   else
     {
       tch.SetRootQueueDisc("ns3::RedQueueDisc",
+                           "MaxSize", StringValue("120p"),
+                           "LinkBandwidth", DataRateValue(DataRate("10Mbps")),
+                           "MeanPktSize", UintegerValue(1000),
                            "MinTh", DoubleValue(24.0),
                            "MaxTh", DoubleValue(72.0),
                            "QW", DoubleValue(0.002),
